@@ -11,4 +11,6 @@ using StaticNumbers
     println(y)
     @test x[1,1] == y[1,1]
     @test all(x .== y)
+
+    # TODO: Write tests that ensure that there is no allocation
 end
