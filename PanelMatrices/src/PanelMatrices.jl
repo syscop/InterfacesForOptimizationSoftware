@@ -3,6 +3,8 @@ module PanelMatrices
 using StaticNumbers
 using StaticArrays
 
+#TODO: using UnsafeArrays 
+
 export PanelMatrix
 
 """

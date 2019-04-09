@@ -6,8 +6,6 @@
 
 * A `PanelMatrix` will contain its size and panel type as type parameters. (All of the parameters needed by BLASFEO will be stored in the type - not in a struct.)
 
-* Probably, we'll use a `PanelMatrixDef` type just to hold the type parameters, as there will be quite many.
-
 * Generic Julia code will be written to handle the panel operations.
 
 * For certain (`eltype`,`size`) combinations, specialized kernels from BLASFEO will override the generic code.
