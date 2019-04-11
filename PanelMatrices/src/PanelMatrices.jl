@@ -2,70 +2,56 @@ module PanelMatrices
 
 using StaticNumbers
 using StaticArrays
+using UnsafeArrays # maybe we don't need this, but just use the same idea.
 
 #TODO: using UnsafeArrays 
 
 export PanelMatrix
 
+struct ColumnMajorPanel{T,M,N}
+
 """
 A `PanelMatrix` is a panel-major matrix, or a view into a panel-major matrix.
-
-It contains a `.data` field which holds the data
-
-Tiles can be, for example, of type `StaticMatrix`.
 """
-struct PanelMatrix{T,D,M,N,U,V,O,P,Q,R} <: AbstractMatrix{T}
-    data::D # the actual data (must be an AbstractMatrix{S} of panels)
-    element_type::Type{T} # type of the elements
-    rows::StaticInteger{M} # rows in this matrix
-    cols::StaticInteger{N} # columns in this matrix
-    rows_per_panel::StaticInteger{U} # number of rows in a panel
-    cols_per_panel::StaticInteger{V} # number of columns in a panel
-    offset_row::StaticInteger{O} # starting row of the matrix
-    offset_col::StaticInteger{P} # starting column of the matrix
-    panel_rows::StaticInteger{Q} # number of rows of panels (can be larger than necessary)
-    panel_cols::StaticInteger{R} # number of columns of panels (can be larger than necessary)
-end
+struct PanelMatrix{T,D,M,N,S,O,P,Q,R} <: AbstractMatrix{T}
+    data::D # The actual data <: AbstractVector{T}
+    size::Tuple{Int, Int} # (rows, columns) in the matrix
+    panel_stride::Int # number of panels per column in data
 
-"""
-A `Panel` is column major
-"""
-struct Panel{T,D,M,N,S,U,V,O,P} <: AbstractMatrix{T}
-    data::D # the actual data (must be an AbstractMatrix{S} of panels)
-    element_type::Type{T} # type of the elements
-    rows::StaticInteger{M} # rows in this matrix
-    cols::StaticInteger{N} # columns in this matrix
-    panel_type::Type{S} # Type of each panel
-    rows_per_panel::StaticInteger{U} # number of rows in a panel
-    cols_per_panel::StaticInteger{V} # number of columns in a panel
-    offset_row::StaticInteger{O} # starting row of the matrix
-    offset_col::StaticInteger{P} # starting column of the matrix
-end
+    # The below field are of size zero. Just more convenient than accessing type parameters.
+    panel_size::Tuple{StaticInteger{M}, StaticInteger{N}} # (rows, columns) in each panel
+    panel_class::Val{S}  # :CM = column major, :RM = row major
 
-function PanelMatrix(data::AbstractArray{T}, rows, cols,
-                     offset_row=0, offset_col=0,
-                     panel_rows=cld(rows+offset_row, size(S,1)),
-                     panel_cols=cld(cols+offset_col, size(S,2)),
-                     ) where S
-    (rows_per_panel, cols_per_panel) = size(S)
-    @boundscheck begin
-        length(data) >= panel_rows*panel_cols*rows_per_panel*cols_per_panel || error("Too little data!") # TODO Create proper exceptopns as constants
-        offset_row + rows <= panel_rows*rows_per_panel || error("Too fews rows of panels")
-        offset_col + cols <= panel_cols*cols_per_panel || error("Too fews columns of panels")
-        all((rows, cols, offset_row, offset_col) .>= 0) || error("Negative sizes/offsets are not allowed.")
-    end
-    return PanelMatrix(data, eltype(S), static(Int(rows)), static(Int(cols)), S,
-        static(Int(rows_per_panel)), static(Int(cols_per_panel)),
-        static(Int(offset_row)), static(Int(offset_col)),
-        static(Int(panel_rows)), static(Int(panel_cols)))
+    # These may be Int or StaticInteger, depending on tradeoff between compile and runtime.
+    pad_first::Tuple{O, P} # (row, column) of first element, within first tile
+    pad_last::Tuple{Q, R} # (row, column) of last element, within last tile
+
+    function PanelMatrix(
+           data::D
+           size::Tuple{Int, Int},
+           panel_size::Tupe{StaticInteger{M}, StaticInteger{N}} = default_panelsize(eltype(data))),
+           panel_class::<:Val{S} = Val{:CM},
+           pad_first::Tuple{O, P} = static.((0, 0)),
+           static_pad_last::Val{Z} = Val{false}
+           ) where {D<:AbstractArray{T} where T where {T,D,M,N,S,O,P,Q,R}
+        @boundscheck begin
+            # TODO: checkbounds(data, 1:len)
+        end
+        pad_last = mod.(panel_size .- offset .- size, panel_size)
+        if Z
+            pad_last = static.(pad_last)
+        end
+        (Q, R) = typeof.(pad_last)
+        new{T,D,M,N,S,O,P,Q,R}(data, size, panel_size, panel_class, pad_first, pad_last)
+   end
 end
 
 function PanelMatrix(x::AbstractMatrix, panel_type::Type=default_panel(eltype(x)))
-    (rows, cols) = size(x)
+    (rows, columns) = size(x)
     panel_rows=cld(rows, size(panel_type, 1))
-    panel_cols=cld(cols, size(panel_type, 2))
-    data = zeros(panel_type, (panel_rows, panel_cols)) # TODO: Cache line alignment
-    z = PanelMatrix(data, rows, cols)
+    panel_columns=cld(columns, size(panel_type, 2))
+    data = zeros(panel_type, (panel_rows, panel_columns)) # TODO: Cache line alignment
+    z = PanelMatrix(data, rows, columns)
     #  TODO: implement z .= x
     for i in eachindex(x)
         z[i] = x[i]
@@ -73,7 +59,7 @@ function PanelMatrix(x::AbstractMatrix, panel_type::Type=default_panel(eltype(x)
     return z
 end
 
-default_panel(T) = MMatrix{4, 4, T, 16}
+default_panelsize(T) = static.((4, 4))
 
 """
     getpanel(x, i, j)
@@ -82,21 +68,17 @@ Get the panel containing element (i,j)
 """
 function getpanel(x::PanelMatrix, i, j)
     @boundscheck checkbounds(x, i, j)
-    # TODO inbounds
-    #x.data[fld(i+x.offset_row, x.rows_per_panel)+1, fld(j+x.offset_col, x.cols_per_panel)+1]
-    Panel(view(x.data, ))
+    # TODO
 end
 
-#TODO: Benchmark whether fixed-length views allocate.
+Base.size(x::PanelMatrix) = x.size
+Base.eltype(x::PanelMatrix) = eltype(x.data)
 
-Base.size(x::PanelMatrix) = (x.rows, x.cols)
-
-Base.eltype(x::PanelMatrix) = x.element_type
-
-function Base.setindex!(x::PanelMatrix, v, i, j)
-     getpanel(x, i, j)[(i % x.rows_per_panel) + 1 ,(j % x.cols_per_panel) + 1] = v
-end
-
-Base.getindex(x::PanelMatrix, i, j) = getpanel(x, i, j)[(i % x.rows_per_panel) + 1 ,(j % x.cols_per_panel) + 1]
+#
+# function Base.setindex!(x::PanelMatrix, v, i, j)
+#      getpanel(x, i, j)[(i % x.rows_per_panel) + 1 ,(j % x.columns_per_panel) + 1] = v
+# end
+#
+# Base.getindex(x::PanelMatrix, i, j) = getpanel(x, i, j)[(i % x.rows_per_panel) + 1 ,(j % x.columns_per_panel) + 1]
 
 end # module
