@@ -19,6 +19,9 @@ using hand-coded assembly that makes this assumtion.)
 
 Care should be taken if mutating the `.data` array. Changing its size
 (e.g. using `push!` or `pop!`) may lead to data corruption.
+
+Memory is allocated to cover the entire panel, even in cases where only parts
+of a panel is covered by the matrix.
 """
 struct PanelMatrix{T,D,U,V,M,N,S,O,P,Q,R} <: AbstractMatrix{T}
     data::D # The actual data <: AbstractVector{T}
@@ -62,7 +65,7 @@ function PanelMatrix{T}(
        ::UndefInitializer,
        size::Tuple{<:Integer, <:Integer},
        panel_size::Tuple{<:Integer, <:Integer} = default_panelsize(eltype(data)),
-       panel_class::Val = Val(:CM),
+       panel_class::Val = default_panelclass(T),
        pad_first::Tuple{<:Integer, <:Integer} = static.((0, 0)),
        pad_last_types::Tuple{<:Type, <:Type} = map(t isa StaticInteger ? StaticInteger : Int, typeof(size))
        ) where {T}
@@ -80,7 +83,7 @@ Create a `PanelMatrix` from the matrix `x` (making a copy).
 """
 function PanelMatrix(x::AbstractMatrix,
         panel_size::Tuple{<:Integer, <:Integer} = default_panelsize(eltype(x)),
-        panel_class::Val = Val(:CM),
+        panel_class::Val = default_panelclass(T),
         pad_first::Tuple{<:Integer, <:Integer} = static.((0, 0)),
         pad_last_types::Tuple{<:Type, <:Type} = (Int, Int)
         )
@@ -95,21 +98,24 @@ end
 
 default_panelsize(T) = static.((4, 4))
 
-# TODO: add @inbounds
+default_panelclass(T) = Val(:CM)
+
 function Base.getindex(x::PanelMatrix, i, j)
     @boundscheck checkbounds(x, i, j)
     (p, q) = divrem.((i, j) .+ x.pad_first .- 1, x.panel_size)
-    GC.@preserve x unsafe_get_full_panel(x, p[1]+1, q[1]+1)[p[2]+1, q[2]+1]
+    GC.@preserve x @inbounds unsafe_full_panel_view(x, p[1]+1, q[1]+1)[p[2]+1, q[2]+1]
 end
 
-# TODO: add @inbounds
 function Base.setindex!(x::PanelMatrix, v, i, j)
     @boundscheck checkbounds(x, i, j)
     (p, q) = divrem.((i, j) .+ x.pad_first .- 1, x.panel_size)
-    GC.@preserve x unsafe_get_full_panel(x, p[1]+1, q[1]+1)[p[2]+1, q[2]+1] = v
+    GC.@preserve x @inbounds unsafe_full_panel_view(x, p[1]+1, q[1]+1)[p[2]+1, q[2]+1] = v
 end
 
 Base.size(x::PanelMatrix) = x.size
 Base.eltype(x::PanelMatrix) = eltype(x.data)
+
+# TODO: Base.similar
+
 
 end # module
