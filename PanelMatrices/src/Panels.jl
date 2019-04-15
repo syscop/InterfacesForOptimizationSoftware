@@ -31,22 +31,37 @@ but this may change.)
 @inline linear_index(::Val{:CM}, sz, i, j) = i + (j - 1) * sz[1]
 @inline linear_index(::Val{:RM}, sz, i, j) = j + (i - 1) * sz[2]
 
-function Base.setindex!(x::Panel, v, i::Integer, j::Integer)
-     @boundscheck checkbounds(x, i, j)
-     if x.data isa Ptr
-         unsafe_store!(x.data, v, linear_index(x.panel_class, x.panel_size, i, j))
-     else
-         @inbounds x.data[linear_index(x.panel_class, x.panel_size, i, j)] = v
-     end
+@inline function Base.setindex!(x::Panel, v, i::Integer, j::Integer)
+    @boundscheck checkbounds(x, i, j)
+    if x.data isa Ptr
+        unsafe_store!(x.data, v, linear_index(x.panel_class, x.panel_size, i, j))
+    else
+        @inbounds x.data[linear_index(x.panel_class, x.panel_size, i, j)] = v
+    end
 end
 
-function Base.getindex(x::Panel, i::Integer, j::Integer)
+@inline function Base.getindex(x::Panel, i::Integer, j::Integer)
     @boundscheck checkbounds(x, i, j)
     if x.data isa Ptr
         unsafe_load(x.data, linear_index(x.panel_class, x.panel_size, i, j))
     else
         @inbounds x.data[linear_index(x.panel_class, x.panel_size, i, j)]
     end
+end
+
+"""
+    full_panel_view(x, i, j)
+
+Get a `Panel` view of panel (i,j) in matrix `x`. An entire panel is
+returned even if the matrix `x` does not cover the entire panel.
+"""
+@inline function full_panel_view(x::PanelMatrix{T}, i::Integer, j::Integer) where T
+    length = prod(x.panel_size)
+    if all(isa.(StaticInteger, typeof.(x.panel_size)))
+        length = static(length)
+    end
+    zeroth = ((i - 1) + (j - 1) * x.panel_stride) * length
+    Panel{T}(view(x.data, LengthUnitRange(zeroth, length)), x.panel_size, x.panel_class, static.((0, 0)), static.((0, 0)))
 end
 
 """
@@ -65,7 +80,8 @@ while an unsafe `Panel` is in scope, or memory corruption may occur.
    end
 ```
 """
-function unsafe_full_panel_view(x::PanelMatrix{T}, i::Integer, j::Integer) where T
-    offset = ((i - 1) + (j - 1) * x.panel_stride) * prod(x.panel_size) + 1
-    Panel{T}(pointer(x.data, offset), x.panel_size, x.panel_class, static.((0, 0)), static.((0, 0)))
+@inline function unsafe_full_panel_view(x::PanelMatrix{T}, i::Integer, j::Integer) where T
+    length = prod(x.panel_size)
+    zeroth = ((i - 1) + (j - 1) * x.panel_stride) * length
+    Panel{T}(pointer(x.data, zeroth+1), x.panel_size, x.panel_class, static.((0, 0)), static.((0, 0)))
 end

@@ -100,16 +100,16 @@ default_panelsize(T) = static.((4, 4))
 
 default_panelclass(T) = Val(:CM)
 
-function Base.getindex(x::PanelMatrix, i, j)
+@inline function Base.getindex(x::PanelMatrix, i, j)
     @boundscheck checkbounds(x, i, j)
     (p, q) = divrem.((i, j) .+ x.pad_first .- 1, x.panel_size)
-    GC.@preserve x @inbounds unsafe_full_panel_view(x, p[1]+1, q[1]+1)[p[2]+1, q[2]+1]
+    @inbounds full_panel_view(x, p[1]+1, q[1]+1)[p[2]+1, q[2]+1]
 end
 
-function Base.setindex!(x::PanelMatrix, v, i, j)
+@inline function Base.setindex!(x::PanelMatrix, v, i, j)
     @boundscheck checkbounds(x, i, j)
     (p, q) = divrem.((i, j) .+ x.pad_first .- 1, x.panel_size)
-    GC.@preserve x @inbounds unsafe_full_panel_view(x, p[1]+1, q[1]+1)[p[2]+1, q[2]+1] = v
+    @inbounds full_panel_view(x, p[1]+1, q[1]+1)[p[2]+1, q[2]+1] = v
 end
 
 Base.size(x::PanelMatrix) = x.size
