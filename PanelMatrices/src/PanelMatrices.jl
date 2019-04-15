@@ -51,8 +51,6 @@ struct PanelMatrix{T,D,U,V,M,N,S,O,P,Q,R} <: AbstractMatrix{T}
     end
 end
 
-include("Panels.jl")
-
 # TODO: We could use keyword args, but first benchmark without and check that
 #       there's no performance issue.
 
@@ -100,6 +98,8 @@ default_panelsize(T) = static.((4, 4))
 
 default_panelclass(T) = Val(:CM)
 
+include("Panels.jl")
+
 @inline function Base.getindex(x::PanelMatrix, i, j)
     @boundscheck checkbounds(x, i, j)
     (p, q) = divrem.((i, j) .+ x.pad_first .- 1, x.panel_size)
@@ -116,6 +116,5 @@ Base.size(x::PanelMatrix) = x.size
 Base.eltype(x::PanelMatrix) = eltype(x.data)
 
 # TODO: Base.similar
-
 
 end # module

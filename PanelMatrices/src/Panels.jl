@@ -53,7 +53,7 @@ end
     full_panel_view(x, i, j)
 
 Get a `Panel` view of panel (i,j) in matrix `x`. An entire panel is
-returned even if the matrix `x` does not cover the entire panel.
+returned even if the matrix does not cover this entire panel.
 """
 @inline function full_panel_view(x::PanelMatrix{T}, i::Integer, j::Integer) where T
     length = prod(x.panel_size)
@@ -61,14 +61,15 @@ returned even if the matrix `x` does not cover the entire panel.
         length = static(length)
     end
     zeroth = ((i - 1) + (j - 1) * x.panel_stride) * length
-    Panel{T}(view(x.data, LengthUnitRange(zeroth, length)), x.panel_size, x.panel_class, static.((0, 0)), static.((0, 0)))
+    @boundscheck checkbounds(x.data, LengthUnitRange(zeroth, length))
+    Panel{T}(@inbounds(view(x.data, LengthUnitRange(zeroth, length))), x.panel_size, x.panel_class, static.((0, 0)), static.((0, 0)))
 end
 
 """
     unsafe_full_panel_view(x, i, j)
 
 Get an unsafe `Panel` view of panel (i,j) in matrix `x`. An entire panel is
-returned even if the matrix `x` does not cover the entire panel.
+returned even if the matrix does not cover this entire panel.
 
 For performance reasons, a pointer is used instead of a proper object reference.
 This means that the original PanelMatrix must be protected from garbage collection
@@ -83,5 +84,37 @@ while an unsafe `Panel` is in scope, or memory corruption may occur.
 @inline function unsafe_full_panel_view(x::PanelMatrix{T}, i::Integer, j::Integer) where T
     length = prod(x.panel_size)
     zeroth = ((i - 1) + (j - 1) * x.panel_stride) * length
+    @boundscheck checkbounds(x.data, LengthUnitRange(zeroth, length))
     Panel{T}(pointer(x.data, zeroth+1), x.panel_size, x.panel_class, static.((0, 0)), static.((0, 0)))
+end
+
+"""
+    get_full_panel(x, i, j)
+
+Get a copy of panel (i,j) in matrix `x`. An entire panel is
+returned even if the matrix does not cover this entire panel.
+"""
+@generated function get_full_panel(x::PanelMatrix{T,D,U,V,StaticInteger{M},StaticInteger{N}},
+        i::Integer, j::Integer) where {T,D,U,V,M,N}
+    quote
+        Base.@_inline_meta
+        v = full_panel_view(x, i, j)
+        SMatrix{$M,$N,$T,$(M*N)}(@inbounds $(Expr(:tuple, vec([:(v[$i,$j]) for i=1:M, j=1:N])...)))
+    end
+end
+
+"""
+    set_full_panel!(x, y, i, j)
+
+Get a copy of panel (i,j) in matrix `x`. An entire panel is
+returned even if the matrix does not cover this entire panel.
+"""
+@generated function set_full_panel!(x::PanelMatrix{T,D,U,V,StaticInteger{M},StaticInteger{N}},
+        y::AbstractArray, i::Integer, j::Integer) where {T,D,U,V,M,N}
+    quote
+        Base.@_inline_meta
+        @boundscheck checkbounds(y, 1:M, 1:N)
+        v = full_panel_view(x, i, j)
+        @inbounds ($(Expr(:tuple, vec([:(v[$i,$j]) for i=1:M, j=1:N])...))) = ($(Expr(:tuple, vec([:(y[$i,$j]) for i=1:M, j=1:N])...)))
+    end
 end
