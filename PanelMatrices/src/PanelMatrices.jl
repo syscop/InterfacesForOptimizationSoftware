@@ -51,7 +51,7 @@ struct PanelMatrix{T,D,U,V,M,N,S,O,P,Q,R} <: AbstractMatrix{T}
     end
 end
 
-include("UnsafePanels.jl")
+include("Panels.jl")
 
 # TODO: We could use keyword args, but first benchmark without and check that
 #       there's no performance issue.
