@@ -95,19 +95,47 @@ while an unsafe `Panel` is in scope, or memory corruption may occur.
 end
 
 """
-    get_full_panel(x, i, j)
+    get_panel(x, i, j, pad_top, pad_bottom, pad_left, pad_right)
 
-Get a copy of panel (i,j) in matrix `x`. An entire panel is
-returned even if the matrix does not cover this entire panel.
+Returns a copy of panel (i,j) in matrix `x`. The amount of padding is specified
+by input arguments, and may be different from the true size of this panel.
+If the panel size and all of the padding is statically known, then an `SMatrix`
+is returned. Otherwise a normal `Matrix` is returned.
 """
-@generated function get_full_panel(x::PanelMatrix{T,D,U,V,StaticInteger{M},StaticInteger{N}},
-        i::Integer, j::Integer) where {T,D,U,V,M,N}
+@generated function get_panel(x::PanelMatrix{T,D,U,V,StaticInteger{M},StaticInteger{N}},
+        i::Integer, j::Integer,
+        ::StaticInteger{PT}, ::StaticInteger{PB},
+        ::StaticInteger{PL}, ::StaticInteger{PR}) where {T,D,U,V,M,N,PT,PB,PL,PR}
     quote
         Base.@_inline_meta
+        @boundscheck all(0 .<= (PT, PB, PL, PR)) && all((PT, PL) .+ (PB, PR) .<= (M,N)) || throw(panel_index_error)
         v = full_panel_view(x, i, j)
-        SMatrix{$M,$N,$T,$(M*N)}(@inbounds $(Expr(:tuple, vec([:(v[$i,$j]) for i=1:M, j=1:N])...)))
+        SMatrix{$(M-PT-PB),$(N-PL-PR),$T,$((M-PT-PB)*(N-PL-PR))}(
+            @inbounds $(Expr(:tuple, vec([:(v[$i,$j]) for i=PT+1:M-PB, j=PL+1:N-PR])...)))
     end
 end
+function get_panel(x::PanelMatrix, i::Integer, j::Integer, pt::Integer, pb::Integer, pl::Integer, pr::Integer)
+    v = full_panel_view(x, i, j)
+    (m,n) = size(v)
+    @boundscheck all(0 .<= (pt, pb, pl, pr)) && all((pt, pl) .+ (pb, pr) .<= (m, n)) || throw(panel_index_error)
+    @inbounds v[pt+1:m-pb, pl+1:n-pr]
+end
+
+"""
+    get_panel(x, i, j)
+
+Returns a copy of panel(i, j), whith the size depending on the location of the
+panel.
+"""
+# TODO
+
+"""
+    get_full_panel(x, i, j)
+
+Get a copy of panel (i, j) in matrix `x`. An entire panel is
+returned even if the matrix does not cover this entire panel.
+"""
+get_full_panel(x, i, j) = get_panel(x, i, j, static(0), static(0), static(0), static(0))
 
 """
     set_full_panel!(x, y, i, j)
