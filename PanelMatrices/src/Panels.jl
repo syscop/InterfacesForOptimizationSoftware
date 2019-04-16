@@ -34,6 +34,7 @@ but this may change.)
 @inline function Base.setindex!(x::Panel, v, i::Integer, j::Integer)
     @boundscheck checkbounds(x, i, j)
     if x.data isa Ptr
+        # panel from unsafe_full_panel_view
         unsafe_store!(x.data, v, linear_index(x.panel_class, x.panel_size, i, j))
     else
         @inbounds x.data[linear_index(x.panel_class, x.panel_size, i, j)] = v
@@ -43,11 +44,14 @@ end
 @inline function Base.getindex(x::Panel, i::Integer, j::Integer)
     @boundscheck checkbounds(x, i, j)
     if x.data isa Ptr
+        # panel from unsafe_full_panel_view
         unsafe_load(x.data, linear_index(x.panel_class, x.panel_size, i, j))
     else
         @inbounds x.data[linear_index(x.panel_class, x.panel_size, i, j)]
     end
 end
+
+const panel_index_error = ErrorException("Panel index out of bounds.")
 
 """
     full_panel_view(x, i, j)
@@ -61,12 +65,14 @@ returned even if the matrix does not cover this entire panel.
         length = static(length)
     end
     zeroth = ((i - 1) + (j - 1) * x.panel_stride) * length
-    @boundscheck checkbounds(x.data, LengthUnitRange(zeroth, length))
+    @boundscheck all(1 .<= (i, j) .* x.panel_size .<= x.size .+ x.pad_first .+ x.pad_last) || throw(panel_index_error)
     Panel{T}(@inbounds(view(x.data, LengthUnitRange(zeroth, length))), x.panel_size, x.panel_class, static.((0, 0)), static.((0, 0)))
 end
 
 """
     unsafe_full_panel_view(x, i, j)
+
+NOTE: This function might be removed in the future. Use `full_panel_view` where possible.
 
 Get an unsafe `Panel` view of panel (i,j) in matrix `x`. An entire panel is
 returned even if the matrix does not cover this entire panel.
@@ -84,7 +90,7 @@ while an unsafe `Panel` is in scope, or memory corruption may occur.
 @inline function unsafe_full_panel_view(x::PanelMatrix{T}, i::Integer, j::Integer) where T
     length = prod(x.panel_size)
     zeroth = ((i - 1) + (j - 1) * x.panel_stride) * length
-    @boundscheck checkbounds(x.data, LengthUnitRange(zeroth, length))
+    @boundscheck all(1 .<= (i, j) .* x.panel_size .<= x.size .+ x.pad_first .+ x.pad_last) || throw(panel_index_error)
     Panel{T}(pointer(x.data, zeroth+1), x.panel_size, x.panel_class, static.((0, 0)), static.((0, 0)))
 end
 
