@@ -51,6 +51,7 @@ end
     end
 end
 
+const panel_padding_error = ErrorException("Incorrect padding size.")
 const panel_index_error = ErrorException("Panel index out of bounds.")
 
 """
@@ -65,7 +66,7 @@ returned even if the matrix does not cover this entire panel.
         length = static(length)
     end
     zeroth = ((i - 1) + (j - 1) * x.panel_stride) * length
-    @boundscheck all(1 .<= (i, j) .* x.panel_size .<= x.size .+ x.pad_first .+ x.pad_last) || throw(panel_index_error)
+    @boundscheck all(1 .<= (i, j) .<= x.n_panels) || throw(panel_index_error)
     Panel{T}(@inbounds(view(x.data, LengthUnitRange(zeroth, length))), x.panel_size, x.panel_class, static.((0, 0)), static.((0, 0)))
 end
 
@@ -77,25 +78,31 @@ by input arguments, and may be different from the true size of this panel.
 If the panel size and all of the padding is statically known, then an `SMatrix`
 is returned. Otherwise a normal `Matrix` is returned.
 """
+function get_panel(x::PanelMatrix, i::Integer, j::Integer,
+        pad_first::Tuple{<:Integer, <:Integer}, pad_last::Tuple{<:Integer, <:Integer})
+    v = full_panel_view(x, i, j)
+    panel_size = size(v)
+    @boundscheck begin
+        all(0 .<= pad_first) && all(0 .<= pad_last) && all(pad_first .+ pad_last .<= panel_size) || throw(panel_padding_error)
+        all(1 .<= (i, j) .<= x.n_panels) || throw(panel_index_error)
+    end
+    @inbounds v[pad_first[1]+1:panel_size[1]-pad_last[1], pad_first[2]+1:panel_size[2]-pad_last[2]]
+end
+
 @generated function get_panel(x::PanelMatrix{T,D,S1,S2,StaticInteger{P1},StaticInteger{P2}},
         i::Integer, j::Integer,
         ::Tuple{StaticInteger{F1}, StaticInteger{F2}},
         ::Tuple{StaticInteger{L1}, StaticInteger{L2}}) where {T,D,S1,S2,P1,P2,F1,F2,L1,L2}
     quote
         Base.@_inline_meta
-        @boundscheck all(0 .<= (F1, L1, F2, L2)) && all((F1, F2) .+ (L1, L2) .<= (P1,P2)) || throw(panel_index_error)
+        @boundscheck begin
+            all(0 .<= (F1, L1, F2, L2)) && all((F1, F2) .+ (L1, L2) .<= (P1,P2)) || throw(panel_padding_error)
+            all(1 .<= (i, j) .<= x.n_panels) || throw(panel_index_error)
+        end
         v = full_panel_view(x, i, j)
         SMatrix{$(P1-F1-L1),$(P2-F2-L2),$T,$((P1-F1-L1)*(P2-F2-L2))}(
             @inbounds $(Expr(:tuple, vec([:(v[$i,$j]) for i=F1+1:P1-L1, j=F2+1:P2-L2])...)))
     end
-end
-
-function get_panel(x::PanelMatrix, i::Integer, j::Integer,
-        pad_first::Tuple{<:Integer, <:Integer}, pad_last::Tuple{<:Integer, <:Integer})
-    v = full_panel_view(x, i, j)
-    panel_size = size(v)
-    @boundscheck all(0 .<= pad_first) && all(0 .<= pad_last) && all(pad_fist .+ pad_last .<= panel_size) || throw(panel_index_error)
-    @inbounds v[pad_first[1]+1:panel_size[1]-pad_last[1], pad_first[2]+1:panel_size[2]-pad_last[2]]
 end
 
 """
@@ -120,15 +127,28 @@ get_full_panel(x, i, j) = get_panel(x, i, j, (static(0), static(0)), (static(0),
 Set panel (i,j) in matrix `x` to `y`. The amount of padding is specified
 by input arguments, and may be different from the true size of this panel.
 """
+function set_panel!(x::PanelMatrix, y::AbstractMatrix, i::Integer, j::Integer,
+        pad_first::Tuple{<:Integer, <:Integer}, pad_last::Tuple{<:Integer, <:Integer})
+    v = full_panel_view(x, i, j)
+    panel_size = size(v)
+    @boundscheck begin
+        all(0 .<= pad_first) && all(0 .<= pad_last) && all(pad_first .+ pad_last .<= panel_size) || throw(panel_padding_error)
+        checkbounds(y, 1:x.panel_size[1]-pad_first[1]-pad_last[1], x.panel_size[2]-pad_first[2]-pad_last[2])
+        all(1 .<= (i, j) .<= x.n_panels) || throw(panel_index_error)
+    end
+    @inbounds v[pad_first[1]+1:panel_size[1]-pad_last[1], pad_first[2]+1:panel_size[2]-pad_last[2]] = y
+end
+
 @generated function set_panel!(x::PanelMatrix{T,D,S1,S2,StaticInteger{P1},StaticInteger{P2}},
-        y::AbstractArray, i::Integer, j::Integer,
+        y::AbstractMatrix, i::Integer, j::Integer,
         ::Tuple{StaticInteger{F1}, StaticInteger{F2}},
         ::Tuple{StaticInteger{L1}, StaticInteger{L2}}) where {T,D,S1,S2,P1,P2,F1,F2,L1,L2}
     quote
         Base.@_inline_meta
         @boundscheck begin
-            all(0 .<= (F1, L1, F2, L2)) && all((F1, F2) .+ (L1, L2) .<= (P1,P2)) || throw(panel_index_error)
+            all(0 .<= (F1, L1, F2, L2)) && all((F1, F2) .+ (L1, L2) .<= (P1,P2)) || throw(panel_padding_error)
             checkbounds(y, 1:P1-F1-L1, 1:P2-F2-L2)
+            all(1 .<= (i, j) .<= x.n_panels) || throw(panel_index_error)
         end
         v = full_panel_view(x, i, j)
         @inbounds $(Expr(:tuple, vec([:(v[$i,$j]) for i=F1+1:P1-L1, j=F2+1:P2-L2])...)) =
