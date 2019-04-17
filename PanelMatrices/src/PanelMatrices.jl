@@ -9,6 +9,16 @@ export PanelMatrix
 const panel_stride_error = ErrorException("Panel stride is less than minimum required.")
 const too_small_error = ErrorException("PanelMatrix size must either be static or greater than the panel size.")
 
+# TODO: Move maybe_static() to StaticNumbers and make a macro for it.
+"""
+    maybe_static(f, args...)
+
+Returns `static(f(args...))`, if all of args are `Static`. If any of the args
+is not `Static`, then `f(args...)` is returned unchanged.
+"""
+@inline maybe_static(f::F, args...) where {F} = f(args...)
+@inline maybe_static(f::F, args::Static...) where {F} = static(f(args...))
+
 # The inner PanelMatrix constructor checks the size of the data vector.
 # Use @inbounds to bypass size and stride check.
 # (Mutating the size of .data may lead to memory corroption. Don't do that!)
@@ -17,6 +27,7 @@ const too_small_error = ErrorException("PanelMatrix size must either be static o
 # is not smaller than panel_size[i] and therefore that pat_first[i] and
 # pad_last[i] never apply to the same panel.
 # pad_last is computed from pad_first, size and panel_size. Only its type can be specified.
+# n_panels is computed from pad_first, size and panel_size. It will be Static if all of those are.
 
 """
 A `PanelMatrix` is a panel-major matrix, or a view into a panel-major matrix.
@@ -39,28 +50,31 @@ Care should be taken if mutating the `.data` array. Changing its size
 Memory is allocated to cover the entire panel, even in cases where only parts
 of a panel is covered by the matrix.
 """
-struct PanelMatrix{T,D,U,V,M,N,S,O,P,Q,R} <: AbstractMatrix{T}
+struct PanelMatrix{T,D,S1,S2,P1,P2,C,F1,F2,L1,L2,R,N1,N2} <: AbstractMatrix{T}
     data::D # The actual data <: AbstractVector{T}
-    size::Tuple{U, V} # (rows, columns) in the matrix
-    panel_size::Tuple{M, N} # (rows, columns) in each panel
-    panel_class::Val{S}  # :CM = column major, :RM = row major
-    pad_first::Tuple{O, P} # (rows, columns) of padding before the first element of first tile
-    pad_last::Tuple{Q, R} # (rows, columns) of padding after the last element until last tile ends
-    panel_stride::Int # number of panels per column in data
+    size::Tuple{S1, S2} # (rows, columns) in the matrix
+    panel_size::Tuple{P1, P2} # (rows, columns) in each panel
+    panel_class::Val{C}  # :CM = column major, :RM = row major
+    pad_first::Tuple{F1, F2} # (rows, columns) of padding before the first element of first tile
+    pad_last::Tuple{L1, L2} # (rows, columns) of padding after the last element until last tile ends
+    panel_stride::R # number of panels per column in data
+    n_panels::Tuple{N1, N2} # (rows, columns) of panels in the matrix
 
-    function PanelMatrix{T,D}(data::D, size::Tuple{U, V}, panel_size::Tuple{M, N},
-           panel_class::Val{S}, pad_first::Tuple{O, P}, pad_last_types::Tuple{<:Type, <:Type},
-           panel_stride::Int) where {T, D<:AbstractVector{T}, U<:Integer, V<:Integer, M<:Integer, N<:Integer, S, O<:Integer, P<:Integer}
+    function PanelMatrix{T,D}(data::D, size::Tuple{S1, S2}, panel_size::Tuple{P1, P2},
+           panel_class::Val{C}, pad_first::Tuple{F1, F2}, pad_last_types::Tuple{<:Type, <:Type},
+           panel_stride::R) where {T, D<:AbstractVector{T}, S1<:Integer, S2<:Integer, P1<:Integer, P2<:Integer, C, F1<:Integer, F2<:Integer, R<:Integer}
+
+        n_panels = maybe_static.((f,s,p) -> cld.(f+s,p), pad_first, size, panel_size)
         @boundscheck begin
             panel_stride * panel_size[1] >= size[1] + pad_first[1] || throw(panel_stride_error)
-            n_panels = cld.(pad_first .+ size, panel_size)
             last_panel = n_panels[1] + (n_panels[2]-1)*panel_stride
             checkbounds(data, Base.OneTo(last_panel*prod(panel_size)))
         end
         any(.!(isa.(StaticInteger, typeof.(size))) .& (size .<= panel_size)) && throw(too_small_error)
-        pad_last = convert.(pad_last_types, mod.(panel_size .- pad_first .- size, panel_size))
-        (Q, R) = typeof.(pad_last)
-        new{T,D,U,V,M,N,S,O,P,Q,R}(data, size, panel_size, panel_class, pad_first, pad_last, panel_stride)
+        pad_last = convert.(pad_last_types, panel_size .* n_panels .- pad_first)
+        (L1, L2) = typeof.(pad_last)
+        (N1, N2) = typeof.(n_panels)
+        new{T,D,S1,S2,P1,P2,C,F1,F2,L1,L2,R,N1,N2}(data, size, panel_size, panel_class, pad_first, pad_last, panel_stride, n_panels)
     end
 end
 

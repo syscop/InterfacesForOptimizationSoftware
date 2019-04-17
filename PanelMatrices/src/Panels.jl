@@ -3,17 +3,17 @@ A `Panel` represents one of the panels in a Panel matrix.
 
 It is used like a view into the matrix.
 """
-struct Panel{T,D,M,N,S,O,P,Q,R} <: AbstractMatrix{T}
+struct Panel{T,D,P1,P2,C,F1,F2,L1,L2} <: AbstractMatrix{T}
     data::D # the actual data (typically a view)
-    panel_size::Tuple{M, N} # (rows, columns) in memory
-    panel_class::Val{S} # :CM = column major, :CN = row major
-    pad_first::Tuple{O, P} # # (rows, columns) of padding before the first element of first tile
-    pad_last::Tuple{Q, R} # (rows, columns) of padding after the last element until tile ends
+    panel_size::Tuple{P1, P2} # (rows, columns) in memory
+    panel_class::Val{C} # :CM = column major, :CN = row major
+    pad_first::Tuple{F1, F2} # # (rows, columns) of padding before the first element of first tile
+    pad_last::Tuple{L1, L2} # (rows, columns) of padding after the last element until tile ends
 
-    function Panel{T}(data::D, panel_size::Tuple{M, N}, panel_class::Val{S},
-            pad_first::Tuple{O, P}, pad_last::Tuple{Q, R}) where {T, D<:Union{Ptr{T}, AbstractArray{T}},
-            M<:Integer, N<:Integer, S, O<:Integer, P<:Integer, Q<:Integer, R<:Integer}
-        new{T,D,M,N,S,O,P,Q,R}(data, panel_size, panel_class, pad_first, pad_last)
+    function Panel{T}(data::D, panel_size::Tuple{P1, P2}, panel_class::Val{C},
+            pad_first::Tuple{F1, F2}, pad_last::Tuple{L1, L2}) where {T, D<:Union{Ptr{T}, AbstractArray{T}},
+            P1<:Integer, P2<:Integer, C, F1<:Integer, F2<:Integer, L1<:Integer, L2<:Integer}
+        new{T,D,P1,P2,C,F1,F2,L1,L2}(data, panel_size, panel_class, pad_first, pad_last)
     end
 end
 
@@ -95,30 +95,32 @@ while an unsafe `Panel` is in scope, or memory corruption may occur.
 end
 
 """
-    get_panel(x, i, j, pad_top, pad_bottom, pad_left, pad_right)
+    get_panel(x, i, j, pad_first, pad_last)
 
 Returns a copy of panel (i,j) in matrix `x`. The amount of padding is specified
 by input arguments, and may be different from the true size of this panel.
 If the panel size and all of the padding is statically known, then an `SMatrix`
 is returned. Otherwise a normal `Matrix` is returned.
 """
-@generated function get_panel(x::PanelMatrix{T,D,U,V,StaticInteger{M},StaticInteger{N}},
+@generated function get_panel(x::PanelMatrix{T,D,S1,S2,StaticInteger{P1},StaticInteger{P2}},
         i::Integer, j::Integer,
-        ::StaticInteger{PT}, ::StaticInteger{PB},
-        ::StaticInteger{PL}, ::StaticInteger{PR}) where {T,D,U,V,M,N,PT,PB,PL,PR}
+        ::Tuple{StaticInteger{F1}, StaticInteger{F2}},
+        ::Tuple{StaticInteger{L1}, StaticInteger{L2}}) where {T,D,S1,S2,P1,P2,F1,F2,L1,L2}
     quote
         Base.@_inline_meta
-        @boundscheck all(0 .<= (PT, PB, PL, PR)) && all((PT, PL) .+ (PB, PR) .<= (M,N)) || throw(panel_index_error)
+        @boundscheck all(0 .<= (F1, L1, F2, L2)) && all((F1, F2) .+ (L1, L2) .<= (P1,P2)) || throw(panel_index_error)
         v = full_panel_view(x, i, j)
-        SMatrix{$(M-PT-PB),$(N-PL-PR),$T,$((M-PT-PB)*(N-PL-PR))}(
-            @inbounds $(Expr(:tuple, vec([:(v[$i,$j]) for i=PT+1:M-PB, j=PL+1:N-PR])...)))
+        SMatrix{$(P1-F1-L1),$(P2-F2-L2),$T,$((P1-F1-L1)*(P2-F2-L2))}(
+            @inbounds $(Expr(:tuple, vec([:(v[$i,$j]) for i=F1+1:P1-L1, j=F2+1:P2-L2])...)))
     end
 end
-function get_panel(x::PanelMatrix, i::Integer, j::Integer, pt::Integer, pb::Integer, pl::Integer, pr::Integer)
+
+function get_panel(x::PanelMatrix, i::Integer, j::Integer,
+        pad_first::Tuple{<:Integer, <:Integer}, pad_last::Tuple{<:Integer, <:Integer})
     v = full_panel_view(x, i, j)
-    (m,n) = size(v)
-    @boundscheck all(0 .<= (pt, pb, pl, pr)) && all((pt, pl) .+ (pb, pr) .<= (m, n)) || throw(panel_index_error)
-    @inbounds v[pt+1:m-pb, pl+1:n-pr]
+    panel_size = size(v)
+    @boundscheck all(0 .<= pad_first) && all(0 .<= pad_last) && all(pad_fist .+ pad_last .<= panel_size) || throw(panel_index_error)
+    @inbounds v[pad_first[1]+1:panel_size[1]-pad_last[1], pad_first[2]+1:panel_size[2]-pad_last[2]]
 end
 
 """
@@ -135,7 +137,7 @@ panel.
 Get a copy of panel (i, j) in matrix `x`. An entire panel is
 returned even if the matrix does not cover this entire panel.
 """
-get_full_panel(x, i, j) = get_panel(x, i, j, static(0), static(0), static(0), static(0))
+get_full_panel(x, i, j) = get_panel(x, i, j, (static(0), static(0)), (static(0), static(0)))
 
 """
     set_full_panel!(x, y, i, j)
@@ -143,12 +145,12 @@ get_full_panel(x, i, j) = get_panel(x, i, j, static(0), static(0), static(0), st
 Get a copy of panel (i,j) in matrix `x`. An entire panel is
 returned even if the matrix does not cover this entire panel.
 """
-@generated function set_full_panel!(x::PanelMatrix{T,D,U,V,StaticInteger{M},StaticInteger{N}},
-        y::AbstractArray, i::Integer, j::Integer) where {T,D,U,V,M,N}
+@generated function set_full_panel!(x::PanelMatrix{T,D,S1,S2,StaticInteger{P1},StaticInteger{P2}},
+        y::AbstractArray, i::Integer, j::Integer) where {T,D,S1,S2,P1,P2}
     quote
         Base.@_inline_meta
-        @boundscheck checkbounds(y, 1:M, 1:N)
+        @boundscheck checkbounds(y, 1:P1, 1:P2)
         v = full_panel_view(x, i, j)
-        @inbounds ($(Expr(:tuple, vec([:(v[$i,$j]) for i=1:M, j=1:N])...))) = ($(Expr(:tuple, vec([:(y[$i,$j]) for i=1:M, j=1:N])...)))
+        @inbounds ($(Expr(:tuple, vec([:(v[$i,$j]) for i=1:P1, j=1:P1])...))) = ($(Expr(:tuple, vec([:(y[$i,$j]) for i=1:P1, j=1:P2])...)))
     end
 end
