@@ -56,7 +56,7 @@ const panel_index_error = ErrorException("Panel index out of bounds.")
 """
     full_panel_view(x, i, j)
 
-Get a `Panel` view of panel (i,j) in matrix `x`. An entire panel is
+Get a `Panel` view of panel (i,j) in matrix `x`. A view of an entire panel is
 returned even if the matrix does not cover this entire panel.
 """
 @inline function full_panel_view(x::PanelMatrix{T}, i::Integer, j::Integer) where T
@@ -115,17 +115,31 @@ returned even if the matrix does not cover this entire panel.
 get_full_panel(x, i, j) = get_panel(x, i, j, (static(0), static(0)), (static(0), static(0)))
 
 """
-    set_full_panel!(x, y, i, j)
+    set_panel!(x, y, i, j, pad_first, pad_last)
 
-Get a copy of panel (i,j) in matrix `x`. An entire panel is
-returned even if the matrix does not cover this entire panel.
+Set panel (i,j) in matrix `x` to `y`. The amount of padding is specified
+by input arguments, and may be different from the true size of this panel.
 """
-@generated function set_full_panel!(x::PanelMatrix{T,D,S1,S2,StaticInteger{P1},StaticInteger{P2}},
-        y::AbstractArray, i::Integer, j::Integer) where {T,D,S1,S2,P1,P2}
+@generated function set_panel!(x::PanelMatrix{T,D,S1,S2,StaticInteger{P1},StaticInteger{P2}},
+        y::AbstractArray, i::Integer, j::Integer,
+        ::Tuple{StaticInteger{F1}, StaticInteger{F2}},
+        ::Tuple{StaticInteger{L1}, StaticInteger{L2}}) where {T,D,S1,S2,P1,P2,F1,F2,L1,L2}
     quote
         Base.@_inline_meta
-        @boundscheck checkbounds(y, 1:P1, 1:P2)
+        @boundscheck begin
+            all(0 .<= (F1, L1, F2, L2)) && all((F1, F2) .+ (L1, L2) .<= (P1,P2)) || throw(panel_index_error)
+            checkbounds(y, 1:P1-F1-L1, 1:P2-F2-L2)
+        end
         v = full_panel_view(x, i, j)
-        @inbounds ($(Expr(:tuple, vec([:(v[$i,$j]) for i=1:P1, j=1:P1])...))) = ($(Expr(:tuple, vec([:(y[$i,$j]) for i=1:P1, j=1:P2])...)))
+        @inbounds $(Expr(:tuple, vec([:(v[$i,$j]) for i=F1+1:P1-L1, j=F2+1:P2-L2])...)) =
+            $(Expr(:tuple, vec([:(y[$i,$j]) for i=1:P1-F1-L1, j=1:P2-F2-L2])...))
     end
 end
+
+"""
+    set_full_panel!(x, y, i, j)
+
+Set the full panel (i,j) in matrix `x` to `y`. An entire panel is
+set even if the matrix does not cover this entire panel.
+"""
+set_full_panel!(x, y, i, j) = set_panel!(x, y, i, j, (static(0), static(0)), (static(0), static(0)))
