@@ -81,7 +81,7 @@ end
 Get a full `Panel` view of panel (i,j) in matrix `x`. A view of an entire panel is
 returned even if the matrix does not cover this entire panel.
 """
-@inline function full_panel_view(x::PanelMatrix{T}, i::Integer, j::Integer) where T
+Base.@propagate_inbounds function full_panel_view(x::PanelMatrix{T}, i::Integer, j::Integer) where T
     panel_view(x, i, j, static.((0, 0)), static.((0, 0)))
 end
 
@@ -100,7 +100,8 @@ is returned. Otherwise a normal `Matrix` is returned.
 """
 @inline function get_panel(x::PanelMatrix{T}, i::Integer, j::Integer,
         pad_first=(nothing, nothing), pad_last=(nothing, nothing)) where {T}
-    Matrix{T}(panel_view(x, i, j, pad_first, pad_last))
+    v = panel_view(x, i, j, pad_first, pad_last)
+    Matrix{T}(v)
 end
 
 @inline function get_panel(x::PanelMatrix{T,D,S1,S2,StaticInteger{P1},StaticInteger{P2}},
@@ -111,7 +112,7 @@ end
         all(0 .<= pad_first) && all(0 .<= pad_last) && all(pad_first .+ pad_last .<= x.panel_size) || throw(panel_padding_error)
         all(1 .<= (i, j) .<= x.n_panels) || throw(panel_index_error)
     end
-    v = panel_view(x, i, j, pad_first, pad_last)
+    v = @inbounds panel_view(x, i, j, pad_first, pad_last)
     SMatrix{P1-F1-L1, P2-F2-L2, T, (P1-F1-L1)*(P2-F2-L2)}(v)
 end
 
@@ -121,7 +122,7 @@ end
 Get a copy of panel (i, j) in matrix `x`. An entire panel is
 returned even if the matrix does not cover this entire panel.
 """
-@inline get_full_panel(x, i, j) = get_panel(x, i, j, (static(0), static(0)), (static(0), static(0)))
+@Base.propagate_inbounds  get_full_panel(x, i, j) = get_panel(x, i, j, (static(0), static(0)), (static(0), static(0)))
 
 """
     set_panel!(x, y, i, j, pad_first, pad_last)
@@ -147,4 +148,4 @@ end
 Set the full panel (i,j) in matrix `x` to `y`. An entire panel is
 set even if the matrix does not cover this entire panel.
 """
-@inline set_full_panel!(x, y, i, j) = set_panel!(x, y, i, j, (static(0), static(0)), (static(0), static(0)))
+@Base.propagate_inbounds set_full_panel!(x, y, i, j) = set_panel!(x, y, i, j, (static(0), static(0)), (static(0), static(0)))
