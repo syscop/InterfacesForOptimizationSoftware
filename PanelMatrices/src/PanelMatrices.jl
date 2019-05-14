@@ -71,7 +71,7 @@ struct PanelMatrix{T,D,S1,S2,P1,P2,C,F1,F2,L1,L2,R,N1,N2} <: AbstractMatrix{T}
             checkbounds(data, Base.OneTo(last_panel*prod(panel_size)))
         end
         any(.!(isa.(StaticInteger, typeof.(size))) .& (size .<= panel_size)) && throw(too_small_error)
-        pad_last = convert.(pad_last_types, panel_size .* n_panels .- pad_first)
+        pad_last = convert.(pad_last_types, panel_size .* n_panels .- pad_first .- size)
         (L1, L2) = typeof.(pad_last)
         (N1, N2) = typeof.(n_panels)
         new{T,D,S1,S2,P1,P2,C,F1,F2,L1,L2,R,N1,N2}(data, size, panel_size, panel_class, pad_first, pad_last, panel_stride, n_panels)

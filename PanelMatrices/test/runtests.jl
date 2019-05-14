@@ -9,6 +9,16 @@ using StaticNumbers
     @test x[1,1] == y[1,1]
     @test all(x .== y)
 
+    v = PanelMatrices.panel_view(x, 1, 1)
+    @test all(v .== [1 11 21 31; 2 12 22 32; 3 13 23 33; 4 14 24 34])
+    @test all(PanelMatrices.panel_view(x, 3, 1) .== [9 19 29 39; 10 20 30 40])
+    @test all(PanelMatrices.get_panel(x, 3, 1) .== [9 19 29 39; 10 20 30 40])
+    @test all(PanelMatrices.panel_view(x, 1, 3) .== [81 91; 82 92; 83 93; 84 94])
+    @test all(PanelMatrices.get_panel(x, 1, 3) .== [81 91; 82 92; 83 93; 84 94])
+    @test all(PanelMatrices.panel_view(x, 3, 3) .== [89 99; 90 100])
+    @test all(PanelMatrices.get_panel(x, 3, 3) .== [89 99; 90 100])
+    @test size(PanelMatrices.full_panel_view(x, 3, 3)) == (4, 4)
+
     p = PanelMatrices.get_full_panel(x, 1, 1)
     @test p === @SMatrix [1 11 21 31; 2 12 22 32; 3 13 23 33; 4 14 24 34]
 
