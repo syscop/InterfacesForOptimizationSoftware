@@ -122,7 +122,7 @@ end
 Get a copy of panel (i, j) in matrix `x`. An entire panel is
 returned even if the matrix does not cover this entire panel.
 """
-@Base.propagate_inbounds  get_full_panel(x, i, j) = get_panel(x, i, j, (static(0), static(0)), (static(0), static(0)))
+Base.@propagate_inbounds get_full_panel(x, i, j) = get_panel(x, i, j, (static(0), static(0)), (static(0), static(0)))
 
 """
     set_panel!(x, y, i, j, pad_first, pad_last)
@@ -148,4 +148,4 @@ end
 Set the full panel (i,j) in matrix `x` to `y`. An entire panel is
 set even if the matrix does not cover this entire panel.
 """
-@Base.propagate_inbounds set_full_panel!(x, y, i, j) = set_panel!(x, y, i, j, (static(0), static(0)), (static(0), static(0)))
+Base.@propagate_inbounds set_full_panel!(x, y, i, j) = set_panel!(x, y, i, j, (static(0), static(0)), (static(0), static(0)))
