@@ -18,8 +18,8 @@ struct Panel{T,D,P1,P2,C,F1,F2,L1,L2} <: AbstractMatrix{T}
 end
 
 Base.size(x::Panel) = x.panel_size .- x.pad_first .- x.pad_last
-Base.eltype(t::Type{Panel{T}}) where {T} = T
-Base.eltype(x::Panel{T}) where {T} = T
+Base.eltype(::Type{Panel{T}}) where {T} = T
+Base.eltype(::Panel{T}) where {T} = T
 
 """
     linear_index(panel_class, panel_size, i, j)
@@ -33,22 +33,12 @@ but this may change.)
 
 @inline function Base.setindex!(x::Panel, v, i::Integer, j::Integer)
     @boundscheck checkbounds(x, i, j)
-    if x.data isa Ptr
-        # panel from unsafe_full_panel_view
-        unsafe_store!(x.data, v, linear_index(x.panel_class, x.panel_size, i, j))
-    else
-        @inbounds x.data[linear_index(x.panel_class, x.panel_size, i, j)] = v
-    end
+    @inbounds x.data[linear_index(x.panel_class, x.panel_size, i, j)] = v
 end
 
 @inline function Base.getindex(x::Panel, i::Integer, j::Integer)
     @boundscheck checkbounds(x, i, j)
-    if x.data isa Ptr
-        # panel from unsafe_full_panel_view
-        unsafe_load(x.data, linear_index(x.panel_class, x.panel_size, i, j))
-    else
-        @inbounds x.data[linear_index(x.panel_class, x.panel_size, i, j)]
-    end
+    @inbounds x.data[linear_index(x.panel_class, x.panel_size, i, j)]
 end
 
 const panel_padding_error = ErrorException("Incorrect padding size.")
