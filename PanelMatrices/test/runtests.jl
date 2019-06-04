@@ -40,6 +40,8 @@ end
     B = PanelMatrix(B0, static.((4,4)))
     C = PanelMatrix{Float64}(undef, (16,16), static.((4,4)))
 
+    C .= 0 # TODO: Fix static(false) 
+
     mul!(C, A, B)
     @test C ≈ C0
 end
