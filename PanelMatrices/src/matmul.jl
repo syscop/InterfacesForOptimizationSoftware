@@ -2,7 +2,7 @@
 @noinline errAB(mA, nA, mB, nB, m=true) = throw(DimensionMismatch("$(m ? :matrix : :panel ) A has dimensions ($mA,$nA), $(m ? :matrix : :panel ) B has dimensions ($mB,$nB)"))
 @noinline errC(mC, nC, mA, nB, m=true) = throw(DimensionMismatch("$(m ? :matrix : :panel ) C has dimensions $(size(C)), needs ($mA,$nB)"))
 
-function LinearAlgebra.mul!(C::PanelMatrix, A::PanelMatrix, B::PanelMatrix, α::Number=false, β::Number=true)
+function LinearAlgebra.mul!(C::PanelMatrix, A::PanelMatrix, B::PanelMatrix, α::Number=static(false), β::Number=static(true))
     mA, nA = size(A)
     mB, nB = size(B)
     mC, nC = size(C)
