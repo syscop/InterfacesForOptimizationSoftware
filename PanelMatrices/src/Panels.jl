@@ -24,20 +24,20 @@ Base.eltype(x::Panel{T}) where {T} = T
 """
     linear_index(panel_class, panel_size, i, j)
 
-Compute a linear index into a panel.
+Compute a linear index into a panel without padding.
 (This function is mainly for internal use. Currently, it does not check bounds,
 but this may change.)
 """
-@inline linear_index(::Val{:CM}, sz, i, j) = i + (j - 1) * sz[1]
-@inline linear_index(::Val{:RM}, sz, i, j) = j + (i - 1) * sz[2]
+@inline linear_index(::Val{:CM}, sz, i, j, pf=static.((0,0))) = i + pf[1] + (j + pf[2] - 1) * sz[1]
+@inline linear_index(::Val{:RM}, sz, i, j, pf=static.((0,0))) = linear_index(Val(:CM), reverse(sz), j, i, reverse(pf))
 
 @inline function Base.setindex!(x::Panel, v, i::Integer, j::Integer)
     @boundscheck checkbounds(x, i, j)
     if x.data isa Ptr
         # panel from unsafe_full_panel_view
-        unsafe_store!(x.data, v, linear_index(x.panel_class, x.panel_size, i, j))
+        unsafe_store!(x.data, v, linear_index(x.panel_class, x.panel_size, i, j, x.pad_first))
     else
-        @inbounds x.data[linear_index(x.panel_class, x.panel_size, i, j)] = v
+        @inbounds x.data[linear_index(x.panel_class, x.panel_size, i, j, x.pad_first)] = v
     end
 end
 
@@ -45,9 +45,9 @@ end
     @boundscheck checkbounds(x, i, j)
     if x.data isa Ptr
         # panel from unsafe_full_panel_view
-        unsafe_load(x.data, linear_index(x.panel_class, x.panel_size, i, j))
+        unsafe_load(x.data, linear_index(x.panel_class, x.panel_size, i, j, x.pad_first))
     else
-        @inbounds x.data[linear_index(x.panel_class, x.panel_size, i, j)]
+        @inbounds x.data[linear_index(x.panel_class, x.panel_size, i, j, x.pad_first)]
     end
 end
 
