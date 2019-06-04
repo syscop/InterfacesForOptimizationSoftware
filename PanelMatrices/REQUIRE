@@ -1,3 +1,4 @@
 julia 0.7
+LinearAlgebra
 StaticArrays 0.10
 StaticNumbers 0.1

@@ -2,6 +2,7 @@ module PanelMatrices
 
 using StaticNumbers
 using StaticArrays
+using LinearAlgebra
 #using UnsafeArrays # maybe we don't need this, but just use the same idea.
 
 export PanelMatrix
@@ -92,7 +93,7 @@ function PanelMatrix{T}(
        panel_size::Tuple{<:Integer, <:Integer} = static.(min.(size, default_panelsize(T))),
        panel_class::Val = default_panelclass(T),
        pad_first::Tuple{<:Integer, <:Integer} = static.((0, 0)),
-       pad_last_types::Tuple{<:Type, <:Type} = map(t isa StaticInteger ? StaticInteger : Int, typeof(size))
+       pad_last_types::Tuple{<:Type, <:Type} = map(t -> t isa StaticInteger ? StaticInteger : Int, typeof.(size))
        ) where {T}
     panel_stride = cld(size[1]+pad_first[1], panel_size[1])
     n_panels = cld.(pad_first .+ size, panel_size)
@@ -143,5 +144,7 @@ Base.size(x::PanelMatrix) = x.size
 Base.eltype(x::PanelMatrix) = eltype(x.data)
 
 # TODO: Base.similar
+
+include("matmul.jl")
 
 end # module
