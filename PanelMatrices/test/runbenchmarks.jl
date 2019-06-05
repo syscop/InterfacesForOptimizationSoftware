@@ -30,22 +30,22 @@ let
     @btime $f($x, $v)
 end
 
-let
-    println("16x16x16 matmul")
-    A0 = reshape(collect(1.0:256.0), 16, 16)
-    B0 = reshape(collect(1.0:256.0), 16, 16)
+for T in (Float32, Float64), n in (16, 32, 64)
+    println("\n$T $n x $n x $n mul!")
+    A0 = reshape(collect(one(T):T(n*n)), n, n)
+    B0 = reshape(collect(one(T):T(n*n)), n, n)
     C0 = A0*B0
 
-    A = PanelMatrix(A0, static.((4,4)))
-    B = PanelMatrix(B0, static.((4,4)))
-    C = PanelMatrix{Float64}(undef, (16,16), static.((4,4)))
+    A = PanelMatrix(A0)
+    B = PanelMatrix(B0)
+    C = PanelMatrix{T}(undef, (n,n))
 
     @btime mul!($C, $A, $B)
 
-    # println("16x16x16 matmul (Julia arrays, for comparison)")
-    # @btime mul!($C0, $A0, $B0)
-    #
-    # println("16x16x16 matmul (MMatrix, for comparison)")
+    println("Julia arrays using $(LinearAlgebra.BLAS.vendor()), for comparison")
+    @btime mul!($C0, $A0, $B0)
+
+    # println("StaticArrays.MMatrix, for comparison")
     # As = MMatrix{size(A0)...}(A0)
     # Bs = MMatrix{size(B0)...}(B0)
     # Cs = MMatrix{size(B0)...}(C0)

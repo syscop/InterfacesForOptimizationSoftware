@@ -1,6 +1,10 @@
 # Error-throwing helper functions
 @noinline errAB(mA, nA, mB, nB, m=true) = throw(DimensionMismatch("$(m ? :matrix : :panel ) A has dimensions ($mA,$nA), $(m ? :matrix : :panel ) B has dimensions ($mB,$nB)"))
-@noinline errC(mC, nC, mA, nB, m=true) = throw(DimensionMismatch("$(m ? :matrix : :panel ) C has dimensions $(size(C)), needs ($mA,$nB)"))
+@noinline errC(mC, nC, mA, nB, m=true) = throw(DimensionMismatch("$(m ? :matrix : :panel ) C has dimensions ($mC,$nC), needs ($mA,$nB)"))
+
+# TODO: Move to StaticNumbers
+Base.:*(::StaticInteger{false}, y::Number) = zero(y) # false is a strong zero
+Base.:*(x::Number, y::StaticInteger{false}) = y*x
 
 function LinearAlgebra.mul!(C::PanelMatrix, A::PanelMatrix, B::PanelMatrix, α::Number=static(false), β::Number=static(true))
     mA, nA = size(A)
@@ -37,15 +41,11 @@ function LinearAlgebra.mul!(C::PanelMatrix, A::PanelMatrix, B::PanelMatrix, α::
     @assert B.pad_last == (0, 0)
     @assert C.pad_last == (0, 0)
 
-    for i in 1 : mA ÷ pmA
-        for j in 1 : nB ÷ pnB
-            @inbounds begin
-                Cp = α*get_full_panel(C, i, j)
-                for k = 1 : nA ÷ pnA
-                    Cp = Cp .+ β .* (get_full_panel(A, i, k) * get_full_panel(B, k, j))
-                end
-                set_full_panel!(C, Cp, i, j)
-            end
+    @inbounds for j in 1 : nB ÷ pnB, i = 1 : mA ÷ pmA
+        Cp = α .* get_full_panel(C, i, j)
+        for k = 1 : nA ÷ pnA
+            Cp = Cp .+ β .* (get_full_panel(A, i, k) * get_full_panel(B, k, j))
         end
+        set_full_panel!(C, Cp, i, j)
     end
 end
