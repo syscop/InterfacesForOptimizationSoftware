@@ -133,10 +133,9 @@ by input arguments, and may be different from the true size of this panel.
 @inline function set_panel!(x::PanelMatrix, y::AbstractMatrix, i::Integer, j::Integer,
         pad_first=(nothing, nothing), pad_last=(nothing, nothing))
     v = panel_view(x, i, j, pad_first, pad_last)
-    panel_size = size(v)
     @boundscheck begin
-        all(0 .<= pad_first) && all(0 .<= pad_last) && all(pad_first .+ pad_last .<= panel_size) || throw(panel_padding_error)
-        checkbounds(y, 1:x.panel_size[1]-pad_first[1]-pad_last[1], x.panel_size[2]-pad_first[2]-pad_last[2])
+        all(0 .<= pad_first) && all(0 .<= pad_last) && all(pad_first .+ pad_last .<= x.panel_size) || throw(panel_padding_error)
+        checkbounds(y, 1:x.panel_size[1]-pad_first[1]-pad_last[1], 1:x.panel_size[2]-pad_first[2]-pad_last[2])
         all(1 .<= (i, j) .<= x.n_panels) || throw(panel_index_error)
     end
     @inbounds v .= y

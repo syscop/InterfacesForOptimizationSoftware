@@ -10,16 +10,6 @@ export PanelMatrix
 const panel_stride_error = ErrorException("Panel stride is less than minimum required.")
 const too_small_error = ErrorException("PanelMatrix size must either be static or greater than the panel size.")
 
-# TODO: Move maybe_static() to StaticNumbers and make a macro for it.
-"""
-    maybe_static(f, args...)
-
-Returns `static(f(args...))`, if all of args are `Static`. If any of the args
-is not `Static`, then `f(args...)` is returned unchanged.
-"""
-@inline maybe_static(f::F, args...) where {F} = f(args...)
-@inline maybe_static(f::F, args::Static...) where {F} = static(f(args...))
-
 # The inner PanelMatrix constructor checks the size of the data vector.
 # Use @inbounds to bypass size and stride check.
 # (Mutating the size of .data may lead to memory corroption. Don't do that!)
@@ -93,7 +83,7 @@ function PanelMatrix{T}(
        panel_size::Tuple{<:Integer, <:Integer} = static.(min.(size, default_panelsize(T))),
        panel_class::Val = default_panelclass(T),
        pad_first::Tuple{<:Integer, <:Integer} = static.((0, 0)),
-       pad_last_types::Tuple{<:Type, <:Type} = map(t -> t isa StaticInteger ? StaticInteger : Int, typeof.(size))
+       pad_last_types::Tuple{<:Type, <:Type} = (StaticInteger, StaticInteger)
        ) where {T}
     panel_stride = cld(size[1]+pad_first[1], panel_size[1])
     n_panels = cld.(pad_first .+ size, panel_size)
@@ -111,14 +101,11 @@ function PanelMatrix(x::AbstractMatrix,
         panel_size::Tuple{<:Integer, <:Integer} = static.(min.(size(x), default_panelsize(eltype(x)))),
         panel_class::Val = default_panelclass(T),
         pad_first::Tuple{<:Integer, <:Integer} = static.((0, 0)),
-        pad_last_types::Tuple{<:Type, <:Type} = (Int, Int)
+        pad_last_types::Tuple{<:Type, <:Type} = (StaticInteger, StaticInteger)
         )
     z = PanelMatrix{eltype(x)}(undef, size(x), panel_size, panel_class, pad_first, pad_last_types)
-    #  TODO: implement z .= x
+    z .= x
     #  TODO: fill padding with zeros ?
-    for i in eachindex(x)
-        z[i] = x[i]
-    end
     return z
 end
 

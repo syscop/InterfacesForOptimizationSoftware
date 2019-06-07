@@ -32,14 +32,16 @@ using LinearAlgebra
 end
 
 @testset "matmul" begin
-    A0 = reshape(collect(1.0:256.0), 16, 16)
-    B0 = reshape(collect(1.0:256.0), 16, 16)
-    C0 = A0*B0
+    for M = (5,8), N = (6,8), K = (7,8)
+        A0 = reshape(collect(1.0:M*K), M, K)
+        B0 = reshape(collect(1.0:K*N), K, N)
+        C0 = A0*B0
 
-    A = PanelMatrix(A0, static.((4,4)))
-    B = PanelMatrix(B0, static.((4,4)))
-    C = PanelMatrix{Float64}(undef, (16,16), static.((4,4)))
+        A = PanelMatrix(A0, static.((4,4)))
+        B = PanelMatrix(B0, static.((4,4)))
+        C = PanelMatrix{Float64}(undef, (M,N), static.((4,4)))
 
-    mul!(C, A, B)
-    @test C ≈ C0
+        mul!(C, A, B)
+        @test C ≈ C0
+    end
 end
