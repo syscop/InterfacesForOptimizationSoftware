@@ -75,7 +75,7 @@ Compute panel (i,j) of C = A*B.
 The amount of padding is passed explicitly as arguments, rather than being
 computed as a function of (i,j)
 """
-function mul_panel!(C, A, B, α, i, j, K, pfm, pfn, pfk, plm, pln, plk)
+@inline function mul_panel!(C, A, B, α, i, j, K, pfm, pfn, pfk, plm, pln, plk)
     Cp = α .* @inbounds(get_panel(C, i, j, (pfm, pfn), (plm, pln)))
     Aik = @inbounds get_panel(A, i, 1, (pfm, pfk), (plm, static(0)))
     Bkj = @inbounds get_panel(B, 1, j, (pfk, pfn), (static(0), pln))
