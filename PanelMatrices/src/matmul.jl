@@ -47,6 +47,16 @@ function LinearAlgebra.mul!(C::PanelMatrix, A::PanelMatrix, B::PanelMatrix, α::
     plm, pln = C.pad_last
     plk = A.pad_last[2]
 
+    StaticNumbers.@tostatic plm 0 3 begin
+        StaticNumbers.@tostatic pln 0 3 begin
+            StaticNumbers.@tostatic plk 0 3 begin
+                _mul!(A, B, C, α, I, J, K, pfm, pfn, pfk, plm, pln, plk)
+            end
+        end
+    end
+end
+
+function _mul!(A, B, C, α, I, J, K, pfm, pfn, pfk, plm, pln, plk)
     # TODO: More cache-friendly ordering of panels
     mul_panel!(C, A, B, α, 1, 1, K, pfm, pfn, pfk, static(0), static(0), plk)
     for i = 2 : I - 1
